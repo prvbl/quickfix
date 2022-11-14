@@ -18,7 +18,7 @@ var (
 	printerMode = printer.UseSpaces | printer.TabIndent
 )
 
-//ParseError indicates generated go source is invalid
+// ParseError indicates generated go source is invalid
 type ParseError struct {
 	path string
 	err  error
@@ -28,16 +28,16 @@ func (e ParseError) Error() string {
 	return fmt.Sprintf("Error parsing %v: %v", e.path, e.err)
 }
 
-//ErrorHandler is a convenience struct for interpretting generation Errors
+// ErrorHandler is a convenience struct for interpretting generation Errors
 type ErrorHandler struct {
 	ReturnCode int
 }
 
-//Handle interprets the generation error. Proceeds with setting returnCode, or panics depending on error type
+// Handle interprets the generation error. Proceeds with setting returnCode, or panics depending on error type
 func (h *ErrorHandler) Handle(err error) {
 	switch err := err.(type) {
 	case nil:
-	//do nothing
+	// do nothing
 	case ParseError:
 		fmt.Println(err)
 		h.ReturnCode = 1
@@ -64,23 +64,43 @@ func write(filePath string, fset *token.FileSet, f *ast.File) error {
 	return err
 }
 
-//WriteFile parses the generated code in fileOut and writes the code out to filePath.
-//Function performs some import clean up and gofmts the code before writing
-//Returns ParseError if the generated source is invalid but is written to filePath
+func writeRaw(filePath string, fileOut string) error {
+	if parentdir := path.Dir(filePath); parentdir != "." {
+		if err := os.MkdirAll(parentdir, os.ModePerm); err != nil {
+			return err
+		}
+	}
+
+	file, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+
+	_, err = file.WriteString(fileOut)
+	return err
+}
+
+// WriteFile parses the generated code in fileOut and writes the code out to filePath.
+// Function performs some import clean up and gofmts the code before writing
+// Returns ParseError if the generated source is invalid but is written to filePath
 func WriteFile(filePath, fileOut string) error {
 	fset := token.NewFileSet()
 	f, pErr := parser.ParseFile(fset, "", fileOut, parser.ParseComments)
+	if f == nil || pErr != nil {
+		// write out the raw file regardless of parseFile failure
+		_ = writeRaw(filePath, fileOut)
+	}
+
 	if f == nil {
 		return pErr
 	}
 
-	//write out the file regardless of parseFile errors
-	if err := write(filePath, fset, f); err != nil {
-		return err
-	}
-
 	if pErr != nil {
 		return ParseError{path: filePath, err: pErr}
+	}
+
+	if err := write(filePath, fset, f); err != nil {
+		return err
 	}
 
 	return nil
