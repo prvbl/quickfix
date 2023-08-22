@@ -30,9 +30,9 @@ func AscFieldOrder(i, j Tag) bool {
 		switch t {
 		case 453: //NoPartyIds
 			return 1
-		case 447: //PartyIdSource
+		case 448: //PartyIdSource
 			return 2
-		case 448: //PartyId
+		case 447: //PartyId
 			return 3
 		case 452: //PartyRole
 			return 4
