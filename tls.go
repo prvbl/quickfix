@@ -1,3 +1,18 @@
+// Copyright (c) quickfixengine.org  All rights reserved.
+//
+// This file may be distributed under the terms of the quickfixengine.org
+// license as defined by quickfixengine.org and appearing in the file
+// LICENSE included in the packaging of this file.
+//
+// This file is provided AS IS with NO WARRANTY OF ANY KIND, INCLUDING
+// THE WARRANTY OF DESIGN, MERCHANTABILITY AND FITNESS FOR A
+// PARTICULAR PURPOSE.
+//
+// See http://www.quickfixengine.org/LICENSE for licensing information.
+//
+// Contact ask@quickfixengine.org if any conditions of this licensing
+// are not clear to you.
+
 package quickfix
 
 import (
@@ -35,33 +50,40 @@ func loadTLSConfig(settings *SessionSettings) (tlsConfig *tls.Config, err error)
 	}
 
 	if !settings.HasSetting(config.SocketPrivateKeyFile) && !settings.HasSetting(config.SocketCertificateFile) {
-		if allowSkipClientCerts {
-			tlsConfig = defaultTLSConfig()
-			tlsConfig.ServerName = serverName
-			tlsConfig.InsecureSkipVerify = insecureSkipVerify
-			setMinVersionExplicit(settings, tlsConfig)
+		if !allowSkipClientCerts {
+			return
 		}
-		return
-	}
-
-	privateKeyFile, err := settings.Setting(config.SocketPrivateKeyFile)
-	if err != nil {
-		return
-	}
-
-	certificateFile, err := settings.Setting(config.SocketCertificateFile)
-	if err != nil {
-		return
 	}
 
 	tlsConfig = defaultTLSConfig()
-	tlsConfig.Certificates = make([]tls.Certificate, 1)
 	tlsConfig.ServerName = serverName
 	tlsConfig.InsecureSkipVerify = insecureSkipVerify
 	setMinVersionExplicit(settings, tlsConfig)
 
-	if tlsConfig.Certificates[0], err = tls.LoadX509KeyPair(certificateFile, privateKeyFile); err != nil {
-		return
+	if settings.HasSetting(config.SocketPrivateKeyFile) || settings.HasSetting(config.SocketCertificateFile) {
+
+		var privateKeyFile string
+		var certificateFile string
+
+		privateKeyFile, err = settings.Setting(config.SocketPrivateKeyFile)
+		if err != nil {
+			return
+		}
+
+		certificateFile, err = settings.Setting(config.SocketCertificateFile)
+		if err != nil {
+			return
+		}
+
+		tlsConfig.Certificates = make([]tls.Certificate, 1)
+
+		if tlsConfig.Certificates[0], err = tls.LoadX509KeyPair(certificateFile, privateKeyFile); err != nil {
+			return
+		}
+	}
+
+	if !allowSkipClientCerts {
+		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 
 	if !settings.HasSetting(config.SocketCAFile) {
@@ -86,12 +108,11 @@ func loadTLSConfig(settings *SessionSettings) (tlsConfig *tls.Config, err error)
 
 	tlsConfig.RootCAs = certPool
 	tlsConfig.ClientCAs = certPool
-	tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
 
 	return
 }
 
-//defaultTLSConfig brought to you by https://github.com/gtank/cryptopasta/
+// defaultTLSConfig brought to you by https://github.com/gtank/cryptopasta/
 func defaultTLSConfig() *tls.Config {
 	return &tls.Config{
 		// Avoids most of the memorably-named TLS attacks

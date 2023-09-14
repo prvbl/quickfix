@@ -1,12 +1,28 @@
+// Copyright (c) quickfixengine.org  All rights reserved.
+//
+// This file may be distributed under the terms of the quickfixengine.org
+// license as defined by quickfixengine.org and appearing in the file
+// LICENSE included in the packaging of this file.
+//
+// This file is provided AS IS with NO WARRANTY OF ANY KIND, INCLUDING
+// THE WARRANTY OF DESIGN, MERCHANTABILITY AND FITNESS FOR A
+// PARTICULAR PURPOSE.
+//
+// See http://www.quickfixengine.org/LICENSE for licensing information.
+//
+// Contact ask@quickfixengine.org if any conditions of this licensing
+// are not clear to you.
+
 package quickfix
 
 import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/suite"
+
 	"github.com/quickfixgo/quickfix/config"
 	"github.com/quickfixgo/quickfix/internal"
-	"github.com/stretchr/testify/suite"
 )
 
 type SessionFactorySuite struct {
@@ -51,6 +67,7 @@ func (s *SessionFactorySuite) TestDefaults() {
 	s.Equal(Millis, session.timestampPrecision)
 	s.Equal(120*time.Second, session.MaxLatency)
 	s.False(session.DisableMessagePersist)
+	s.False(session.HeartBtIntOverride)
 }
 
 func (s *SessionFactorySuite) TestResetOnLogon() {
@@ -358,9 +375,47 @@ func (s *SessionFactorySuite) TestNewSessionBuildInitiators() {
 	s.Equal("127.0.0.1:5000", session.SocketConnectAddress[0])
 }
 
+func (s *SessionFactorySuite) TestNewSessionBuildAcceptors() {
+	s.sessionFactory.BuildInitiators = false
+	s.SessionSettings.Set(config.HeartBtInt, "34")
+
+	session, err := s.newSession(s.SessionID, s.MessageStoreFactory, s.SessionSettings, s.LogFactory, s.App)
+	s.Nil(err)
+	s.False(session.InitiateLogon)
+	s.Zero(session.HeartBtInt)
+	s.False(session.HeartBtIntOverride)
+
+	s.SessionSettings.Set(config.HeartBtIntOverride, "Y")
+	session, err = s.newSession(s.SessionID, s.MessageStoreFactory, s.SessionSettings, s.LogFactory, s.App)
+	s.Nil(err)
+	s.False(session.InitiateLogon)
+	s.Equal(34*time.Second, session.HeartBtInt)
+	s.True(session.HeartBtIntOverride)
+}
+
 func (s *SessionFactorySuite) TestNewSessionBuildInitiatorsValidHeartBtInt() {
 	s.sessionFactory.BuildInitiators = true
 
+	_, err := s.newSession(s.SessionID, s.MessageStoreFactory, s.SessionSettings, s.LogFactory, s.App)
+	s.NotNil(err, "HeartBtInt should be required for acceptors with override defined")
+
+	s.SessionSettings.Set(config.HeartBtInt, "not a number")
+	_, err = s.newSession(s.SessionID, s.MessageStoreFactory, s.SessionSettings, s.LogFactory, s.App)
+	s.NotNil(err, "HeartBtInt must be a number")
+
+	s.SessionSettings.Set(config.HeartBtInt, "0")
+	_, err = s.newSession(s.SessionID, s.MessageStoreFactory, s.SessionSettings, s.LogFactory, s.App)
+	s.NotNil(err, "HeartBtInt must be greater than zero")
+
+	s.SessionSettings.Set(config.HeartBtInt, "-20")
+	_, err = s.newSession(s.SessionID, s.MessageStoreFactory, s.SessionSettings, s.LogFactory, s.App)
+	s.NotNil(err, "HeartBtInt must be greater than zero")
+}
+
+func (s *SessionFactorySuite) TestNewSessionBuildAcceptorsValidHeartBtInt() {
+	s.sessionFactory.BuildInitiators = false
+
+	s.SessionSettings.Set(config.HeartBtIntOverride, "Y")
 	_, err := s.newSession(s.SessionID, s.MessageStoreFactory, s.SessionSettings, s.LogFactory, s.App)
 	s.NotNil(err, "HeartBtInt should be required for initiators")
 
