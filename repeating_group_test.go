@@ -291,3 +291,49 @@ func TestRepeatingGroup_ReadComplete(t *testing.T) {
 		}
 	}
 }
+
+func TestRepeatingGroup_ReadThenWrite(t *testing.T) {
+	nestedTemplate := GroupTemplate{
+		GroupElement(1),
+		NewRepeatingGroup(Tag(2), GroupTemplate{GroupElement(3), GroupElement(4)}),
+		GroupElement(5),
+	}
+
+	tests := []struct {
+		groupTemplate GroupTemplate
+		tv            []TagValue
+	}{
+		{GroupTemplate{GroupElement(1), GroupElement(2), GroupElement(3)},
+			[]TagValue{
+				{value: []byte("2")},
+				{tag: Tag(1), value: []byte("hello")}, {tag: Tag(2), value: []byte("cruel")}, {tag: Tag(3), value: []byte("world")},
+				{tag: Tag(1), value: []byte("goodbye")}, {tag: Tag(2), value: []byte("cruel")}, {tag: Tag(3), value: []byte("world")},
+			}},
+		{nestedTemplate,
+			[]TagValue{
+				{value: []byte("2")},
+				{tag: Tag(1), value: []byte("a")},
+				{tag: Tag(2), value: []byte("2")}, {tag: Tag(3), value: []byte("b")}, {tag: Tag(4), value: []byte("c")}, {tag: Tag(3), value: []byte("d")},
+				{tag: Tag(5), value: []byte("e")},
+				{tag: Tag(1), value: []byte("f")}, {tag: Tag(5), value: []byte("g")},
+			}},
+	}
+
+	for _, test := range tests {
+		f := RepeatingGroup{tag: Tag(100), template: test.groupTemplate}
+
+		if _, err := f.Read(test.tv); err != nil {
+			t.Fatal(err)
+		}
+
+		written := f.Write()
+		if len(written) != len(test.tv) {
+			t.Fatalf("expected %v tag values written back, got %v", len(test.tv), len(written))
+		}
+		for i, tv := range test.tv[1:] {
+			if written[i+1].tag != tv.tag || !bytes.Equal(written[i+1].value, tv.value) {
+				t.Errorf("tag value %v: expected %v=%s, got %v=%s", i+1, tv.tag, tv.value, written[i+1].tag, written[i+1].value)
+			}
+		}
+	}
+}

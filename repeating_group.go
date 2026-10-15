@@ -216,7 +216,8 @@ func (f *RepeatingGroup) Read(tv []TagValue) ([]TagValue, error) {
 		}
 
 		group.rwLock.Lock()
-		group.tagLookup[tvRange[0].tag] = tvRange
+		// Only the field just read: tvRange runs on to the end of the message, and Write emits it whole.
+		group.tagLookup[tvRange[0].tag] = tvRange[:len(tvRange)-len(tv)]
 		group.tags = append(group.tags, gi.Tag())
 		group.rwLock.Unlock()
 	}
